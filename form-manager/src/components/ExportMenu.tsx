@@ -134,12 +134,12 @@ const ExportMenu: React.FC<ExportMenuProps> = ({ forms, disabled = false }) => {
       // Detalles del formulario
       doc.setFont(undefined, 'normal');
       const details = [
-        `Estado: ${form.status}`,
-        `Tipo: ${form.type}`,
-        `Etiquetas: ${form.tags.join(', ') || 'Ninguna'}`,
+        `Estado: ${form.status || 'No especificado'}`,
+        `Tipo: ${form.type || 'No especificado'}`,
+        `Etiquetas: ${Array.isArray(form.tags) && form.tags.length > 0 ? form.tags.join(', ') : 'Ninguna'}`,
         `Respuestas: ${form.responsesCount || 0}`,
-        `Creado: ${new Date(form.createdAt).toLocaleDateString()}`,
-        `Última actualización: ${new Date(form.updatedAt).toLocaleDateString()}`
+        `Creado: ${form.createdAt ? new Date(form.createdAt).toLocaleDateString() : 'Fecha no disponible'}`,
+        `Última actualización: ${form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : 'Fecha no disponible'}`
       ];
       
       details.forEach(detail => {
@@ -155,39 +155,49 @@ const ExportMenu: React.FC<ExportMenuProps> = ({ forms, disabled = false }) => {
   };
 
   const exportToCsv = () => {
-    const csvData = forms.map(form => ({
-      'Título': form.title,
-      'Descripción': form.description,
-      'Estado': form.status,
-      'Tipo': form.type,
-      'Etiquetas': form.tags.join(', '),
-      'Respuestas': form.responsesCount || 0,
-      'Creado': new Date(form.createdAt).toLocaleDateString(),
-      'Última actualización': new Date(form.updatedAt).toLocaleDateString(),
-    }));
-    
-    const worksheet = XLSX.utils.json_to_sheet(csvData);
-    const csv = XLSX.utils.sheet_to_csv(worksheet);
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, `formularios-${new Date().toISOString().split('T')[0]}.csv`);
+    try {
+      const csvData = forms.map(form => ({
+        'Título': form.title || 'Sin título',
+        'Descripción': form.description || 'Sin descripción',
+        'Estado': form.status || 'No especificado',
+        'Tipo': form.type || 'No especificado',
+        'Etiquetas': Array.isArray(form.tags) && form.tags.length > 0 ? form.tags.join(', ') : 'Ninguna',
+        'Respuestas': form.responsesCount || 0,
+        'Creado': form.createdAt ? new Date(form.createdAt).toLocaleDateString() : 'Fecha no disponible',
+        'Última actualización': form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : 'Fecha no disponible',
+      }));
+      
+      const worksheet = XLSX.utils.json_to_sheet(csvData);
+      const csv = XLSX.utils.sheet_to_csv(worksheet);
+      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+      saveAs(blob, `formularios-${new Date().toISOString().split('T')[0]}.csv`);
+    } catch (error) {
+      console.error('Error al exportar a CSV:', error);
+      throw error;
+    }
   };
 
   const exportToXlsx = () => {
-    const xlsxData = forms.map(form => ({
-      'Título': form.title,
-      'Descripción': form.description,
-      'Estado': form.status,
-      'Tipo': form.type,
-      'Etiquetas': form.tags.join(', '),
-      'Respuestas': form.responsesCount || 0,
-      'Creado': new Date(form.createdAt).toLocaleDateString(),
-      'Última actualización': new Date(form.updatedAt).toLocaleDateString(),
-    }));
-    
-    const worksheet = XLSX.utils.json_to_sheet(xlsxData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Formularios');
-    XLSX.writeFile(workbook, `formularios-${new Date().toISOString().split('T')[0]}.xlsx`);
+    try {
+      const xlsxData = forms.map(form => ({
+        'Título': form.title || 'Sin título',
+        'Descripción': form.description || 'Sin descripción',
+        'Estado': form.status || 'No especificado',
+        'Tipo': form.type || 'No especificado',
+        'Etiquetas': Array.isArray(form.tags) && form.tags.length > 0 ? form.tags.join(', ') : 'Ninguna',
+        'Respuestas': form.responsesCount || 0,
+        'Creado': form.createdAt ? new Date(form.createdAt).toLocaleDateString() : 'Fecha no disponible',
+        'Última actualización': form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : 'Fecha no disponible',
+      }));
+      
+      const worksheet = XLSX.utils.json_to_sheet(xlsxData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Formularios');
+      XLSX.writeFile(workbook, `formularios-${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error) {
+      console.error('Error al exportar a Excel:', error);
+      throw error;
+    }
   };
 
   const exportToJson = () => {

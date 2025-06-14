@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
@@ -36,6 +36,8 @@ import {
   InputLabel,
   OutlinedInput,
   Chip,
+  Radio,
+  Switch,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -52,6 +54,8 @@ import {
   ExpandLess as ExpandLessIcon,
   MoreVert as MoreVertIcon,
   Check as CheckIcon,
+  Close as CloseIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { useFormContext } from '../context/FormContext';
 
@@ -85,7 +89,7 @@ const fieldTypes = [
   { value: 'date', label: 'Fecha', icon: <ShortTextIcon /> },
 ];
 
-const FormBuilder = () => {
+const FormBuilder: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -97,27 +101,169 @@ const FormBuilder = () => {
     open: false,
     message: '',
     severity: 'success' as 'success' | 'error' | 'info' | 'warning',
+    action: null as React.ReactNode | null,
   });
+
+  const handleCopyLink = (formId: string) => {
+    const publicUrl = `${window.location.origin}/forms/public/${formId}`;
+    navigator.clipboard.writeText(publicUrl);
+    setSnackbar({
+      open: true,
+      message: '¡Enlace copiado al portapapeles!',
+      severity: 'info',
+      action: null,
+    });
+  };
   const [isSaving, setIsSaving] = useState(false);
+  const [autoSave, setAutoSave] = useState(false);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [fieldToDelete, setFieldToDelete] = useState<number | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Inicializar el formulario
-  useEffect(() => {
-    if (id) {
-      const existingForm = getFormById(id);
-      if (existingForm) {
-        setIsEditing(true);
-        formik.setValues({
-          title: existingForm.title,
-          description: existingForm.description || '',
-          fields: existingForm.fields,
-        });
-        setCurrentForm(existingForm);
+  // Componente de vista previa
+  const FormPreview = () => {
+    const renderPreviewField = (field: FormField) => {
+      switch (field.type) {
+        case 'text':
+        case 'email':
+        case 'number':
+        case 'date':
+          return (
+            <TextField
+              fullWidth
+              variant="outlined"
+              type={field.type}
+              placeholder={field.placeholder || ''}
+              required={field.required}
+              disabled
+              sx={{ mt: 1 }}
+            />
+          );
+        case 'textarea':
+          return (
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              variant="outlined"
+              placeholder={field.placeholder || ''}
+              required={field.required}
+              disabled
+              sx={{ mt: 1 }}
+            />
+          );
+        case 'radio':
+        case 'checkbox':
+          return (
+            <FormGroup>
+              {field.options?.map((option, i) => (
+                <FormControlLabel
+                  key={i}
+                  control={
+                    field.type === 'radio' ? (
+                      <Radio disabled />
+                    ) : (
+                      <Checkbox disabled />
+                    )
+                  }
+                  label={option}
+                />
+              ))}
+            </FormGroup>
+          );
+        case 'select':
+          return (
+            <FormControl fullWidth variant="outlined" sx={{ mt: 1 }}>
+              <Select
+                value=""
+                displayEmpty
+                disabled
+                renderValue={() => 'Selecciona una opción'}
+              >
+                {field.options?.map((option, i) => (
+                  <MenuItem key={i} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          );
+        default:
+          return null;
       }
-    }
-    return () => setCurrentForm(null);
-  }, [id, getFormById, setCurrentForm]);
+    };
+
+    return (
+      <Dialog
+        fullScreen
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+        aria-labelledby="form-preview-title"
+      >
+        <DialogTitle id="form-preview-title">
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">Vista previa del formulario</Typography>
+            <IconButton
+              edge="end"
+              color="inherit"
+              onClick={() => setShowPreview(false)}
+              aria-label="Cerrar"
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Container maxWidth="md">
+            <Box sx={{ my: 4 }}>
+              <Typography variant="h4" gutterBottom>
+                {formik.values.title || 'Formulario sin título'}
+              </Typography>
+              {formik.values.description && (
+                <Typography variant="body1" paragraph>
+                  {formik.values.description}
+                </Typography>
+              )}
+              
+              <Divider sx={{ my: 3 }} />
+              
+              {formik.values.fields.length > 0 ? (
+                formik.values.fields.map((field, index) => (
+                  <Box key={field.id} sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                      {field.label || 'Pregunta sin título'}
+                      {field.required && ' *'}
+                    </Typography>
+                    {field.description && (
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        {field.description}
+                      </Typography>
+                    )}
+                    {renderPreviewField(field)}
+                  </Box>
+                ))
+              ) : (
+                <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                  No hay preguntas en este formulario.
+                </Typography>
+              )}
+            </Box>
+          </Container>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, bgcolor: 'background.paper' }}>
+          <Button 
+            onClick={() => setShowPreview(false)} 
+            variant="outlined"
+            startIcon={<CloseIcon />}
+          >
+            Cerrar vista previa
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  };
 
   const formik = useFormik<FormValues>({
     initialValues: {
@@ -139,16 +285,28 @@ const FormBuilder = () => {
         Yup.object().shape({
           label: Yup.string().required('La etiqueta es requerida'),
           required: Yup.boolean(),
-          options: Yup.array().when('type', {
+          options: Yup.array().when(['type'], {
             is: (type: string) => ['radio', 'checkbox', 'select'].includes(type),
-            then: Yup.array().of(Yup.string().required('La opción no puede estar vacía')).min(1, 'Al menos una opción es requerida'),
+            then: (schema) => schema
+              .of(Yup.string().required('La opción no puede estar vacía'))
+              .min(1, 'Al menos una opción es requerida'),
+            otherwise: (schema) => schema.notRequired(),
           }),
         })
       ),
     }),
-    onSubmit: async (values) => {
+    onSubmit: async (values, { setSubmitting }) => {
       try {
         setIsSaving(true);
+        
+        if (!values.title.trim()) {
+          setSnackbar({
+            open: true,
+            message: 'El título del formulario es requerido',
+            severity: 'error',
+          });
+          return;
+        }
         
         if (isEditing && id) {
           await updateForm(id, values);
@@ -164,12 +322,18 @@ const FormBuilder = () => {
             message: 'Formulario creado correctamente',
             severity: 'success',
           });
-          navigate(`/forms/edit/${newForm.id}`);
+          navigate(`/forms/edit/${newForm.id}`, { replace: true });
         }
+        
+        setLastSaved(new Date().toLocaleTimeString());
+        formik.setTouched({});
+        setSubmitting(false);
+        
       } catch (error) {
+        console.error('Error al guardar el formulario:', error);
         setSnackbar({
           open: true,
-          message: 'Error al guardar el formulario',
+          message: 'Error al guardar el formulario. Por favor, inténtalo de nuevo.',
           severity: 'error',
         });
       } finally {
@@ -177,6 +341,36 @@ const FormBuilder = () => {
       }
     },
   });
+
+  useEffect(() => {
+    if (id) {
+      const existingForm = getFormById(id);
+      if (existingForm) {
+        setIsEditing(true);
+        formik.setValues({
+          title: existingForm.title,
+          description: existingForm.description || '',
+          fields: existingForm.fields,
+        });
+        setCurrentForm(existingForm);
+        setLastSaved(new Date().toLocaleTimeString());
+      }
+    } else {
+      setLastSaved('Nunca');
+    }
+    
+    if (autoSave) {
+      const interval = setInterval(() => {
+        if (formik.dirty) {
+          formik.submitForm();
+        }
+      }, 30000); // Guardar cada 30 segundos
+      
+      return () => clearInterval(interval);
+    }
+    
+    return () => setCurrentForm(null);
+  }, [id, getFormById, setCurrentForm, autoSave, formik.dirty]);
 
   const handleAddField = (type: FieldType) => {
     const newField: FormField = {
@@ -533,7 +727,7 @@ const FormBuilder = () => {
   };
 
   return (
-    <Container maxWidth="xl">
+    <Container maxWidth="xl" sx={{ py: 3 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button
           startIcon={<ArrowBackIcon />}
@@ -555,7 +749,48 @@ const FormBuilder = () => {
           <Button
             variant="contained"
             startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-            onClick={() => formik.handleSubmit()}
+            onClick={async () => {
+              try {
+                setIsSaving(true);
+                
+                if (isEditing && id) {
+                  await updateForm(id, formik.values);
+                  setSnackbar({
+                    open: true,
+                    message: 'Formulario actualizado correctamente',
+                    severity: 'success',
+                  });
+                } else {
+                  const newForm = addForm(formik.values);
+                  setSnackbar({
+                    open: true,
+                    message: 'Formulario guardado correctamente',
+                    severity: 'success',
+                    action: (
+                      <Button 
+                        color="inherit" 
+                        size="small"
+                        onClick={() => handleCopyLink(newForm.id)}
+                      >
+                        Copiar enlace
+                      </Button>
+                    ),
+                  });
+                  navigate(`/forms/edit/${newForm.id}`, { replace: true });
+                }
+                
+                setLastSaved(new Date().toLocaleTimeString());
+              } catch (error) {
+                console.error('Error al guardar el formulario:', error);
+                setSnackbar({
+                  open: true,
+                  message: 'Error al guardar el formulario. Por favor, inténtalo de nuevo.',
+                  severity: 'error',
+                });
+              } finally {
+                setIsSaving(false);
+              }
+            }}
             disabled={isSaving || !formik.isValid}
             sx={{ textTransform: 'none', borderRadius: 2, px: 3 }}
           >
@@ -775,10 +1010,53 @@ const FormBuilder = () => {
           severity={snackbar.severity}
           variant="filled"
           sx={{ width: '100%' }}
+          action={snackbar.action}
         >
           {snackbar.message}
         </Alert>
       </Snackbar>
+      {/* Barra de estado */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        mt: 3,
+        p: 1.5,
+        bgcolor: 'background.paper',
+        borderRadius: 2,
+        boxShadow: 1
+      }}>
+        <Typography variant="body2" color="text.secondary">
+          {isSaving ? (
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <CircularProgress size={16} sx={{ mr: 1 }} />
+              Guardando...
+            </Box>
+          ) : (
+            `Último guardado: ${lastSaved || 'Nunca'}`
+          )}
+        </Typography>
+        <Box>
+          <FormControlLabel
+            control={
+              <Switch 
+                checked={autoSave}
+                onChange={(e) => setAutoSave(e.target.checked)}
+                size="small"
+              />
+            }
+            label="Autoguardado"
+            sx={{ mr: 2 }}
+          />
+          <Button
+            variant="outlined"
+            onClick={() => setShowPreview(true)}
+            sx={{ textTransform: 'none', borderRadius: 2 }}
+          >
+            Vista previa
+          </Button>
+        </Box>
+      </Box>
     </Container>
   );
 };

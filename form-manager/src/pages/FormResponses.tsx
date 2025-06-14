@@ -81,12 +81,12 @@ function a11yProps(index: number) {
 }
 
 const FormResponses = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id: formId } = useParams<{ id: string }>();
+  const { getFormById } = useFormContext();
   const navigate = useNavigate();
   const theme = useTheme();
-  const { getFormById } = useFormContext();
-  const [form, setForm] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState<any>(null);
   const [tabValue, setTabValue] = useState(0);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -104,7 +104,7 @@ const FormResponses = () => {
   const mockResponses = [
     {
       id: '1',
-      submittedAt: '2023-05-15T14:30:00Z',
+      submittedAt: '2025-05-15T14:30:00Z',
       data: {
         name: 'Juan Pérez',
         email: 'juan@example.com',
@@ -114,7 +114,7 @@ const FormResponses = () => {
     },
     {
       id: '2',
-      submittedAt: '2023-05-14T10:15:00Z',
+      submittedAt: '2025-05-14T10:15:00Z',
       data: {
         name: 'María García',
         email: 'maria@example.com',
@@ -193,14 +193,211 @@ const FormResponses = () => {
     setViewDialogOpen(true);
   };
 
-  const handleExportResponses = (format: 'csv' | 'excel' | 'pdf') => {
-    // Lógica para exportar respuestas
-    setSnackbar({
-      open: true,
-      message: `Exportando respuestas en formato ${format.toUpperCase()}...`,
-      severity: 'info',
-    });
-    handleMenuClose();
+  const handleExportResponses = async (format: 'csv' | 'xlsx' | 'pdf' | 'json') => {
+    try {
+      setSnackbar({
+        open: true,
+        message: `Exportando respuestas en formato ${format.toUpperCase()}...`,
+        severity: 'info',
+      });
+
+      if (!formId) return;
+
+      const responses = form?.responses || [];
+      const fileName = `respuestas-${form?.title?.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}`;
+
+      if (format === 'json') {
+        const data = {
+          formId: form?.id,
+          formTitle: form?.title,
+          totalResponses: responses.length,
+          responses: responses.map(response => ({
+            id: response.id,
+            submittedAt: response.submittedAt,
+            answers: response.answers
+          }))
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        saveAs(blob, `${fileName}.json`);
+        return;
+      }
+
+      if (format === 'csv') {
+        if (!responses.length) {
+          setSnackbar({
+            open: true,
+            message: 'No hay respuestas para exportar',
+            severity: 'warning',
+          });
+          return;
+        }
+
+        // Obtener todos los campos únicos de las respuestas
+        const allFields = new Set<string>();
+        responses.forEach(response => {
+          Object.keys(response.answers).forEach(field => allFields.add(field));
+        });
+
+        // Crear encabezados
+        const headers = ['ID', 'Fecha de envío', ...Array.from(allFields)];
+        
+        // Crear filas de datos
+        const rows = responses.map(response => {
+          const row: (string | number | boolean)[] = [
+            response.id,
+            new Date(response.submittedAt).toLocaleString()
+          ];
+          
+          // Mapear cada campo a su valor o vacío si no existe
+          allFields.forEach(field => {
+            const value = response.answers[field];
+            row.push(value !== undefined ? value : '');
+          });
+          
+          return row;
+        });
+
+        // Convertir a CSV
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => 
+            row.map(cell => 
+              typeof cell === 'string' ? `"${cell.replace(/"/g, '""')}"` : cell
+            ).join(',')
+          )
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        saveAs(blob, `${fileName}.csv`);
+        return;
+      }
+
+      if (format === 'xlsx') {
+        if (!responses.length) {
+          setSnackbar({
+            open: true,
+            message: 'No hay respuestas para exportar',
+            severity: 'warning',
+          });
+          return;
+        }
+
+        const XLSX = await import('xlsx');
+        
+        // Obtener todos los campos únicos de las respuestas
+        const allFields = new Set<string>();
+        responses.forEach(response => {
+          Object.keys(response.answers).forEach(field => allFields.add(field));
+        });
+
+        // Crear datos para la hoja de cálculo
+        const wsData = responses.map(response => {
+          const row: Record<string, any> = {
+            'ID': response.id,
+            'Fecha de envío': new Date(response.submittedAt).toLocaleString()
+          };
+          
+          // Agregar cada campo a la fila
+          allFields.forEach(field => {
+            row[field] = response.answers[field] !== undefined ? response.answers[field] : '';
+          });
+          
+          return row;
+        });
+
+        // Crear hoja de cálculo
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        
+        // Crear libro de trabajo y guardar
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Respuestas');
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+        return;
+      }
+
+      if (format === 'pdf') {
+        if (!responses.length) {
+          setSnackbar({
+            open: true,
+            message: 'No hay respuestas para exportar',
+            severity: 'warning',
+          });
+          return;
+        }
+
+        
+        const { jsPDF } = await import('jspdf');
+        const doc = new jsPDF();
+        let yPos = 20;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 15;
+        const maxWidth = pageWidth - 2 * margin;
+        
+        // Título
+        doc.setFontSize(18);
+        doc.text(`Respuestas: ${form?.title}`, margin, yPos, { maxWidth });
+        yPos += 10;
+        
+        // Información general
+        doc.setFontSize(12);
+        doc.text(`Total de respuestas: ${responses.length}`, margin, yPos);
+        yPos += 10;
+        
+        // Para cada respuesta
+        responses.forEach((response, index) => {
+          // Nueva página si es necesario (dejando espacio para al menos 5 líneas de la próxima respuesta)
+          if (yPos > 250) {
+            doc.addPage();
+            yPos = 20;
+          }
+          
+          // Título de la respuesta
+          doc.setFont(undefined, 'bold');
+          doc.text(`Respuesta #${index + 1}`, margin, yPos);
+          yPos += 7;
+          
+          // ID y fecha
+          doc.setFont(undefined, 'normal');
+          doc.text(`ID: ${response.id}`, margin + 5, yPos);
+          yPos += 6;
+          doc.text(`Enviado: ${new Date(response.submittedAt).toLocaleString()}`, margin + 5, yPos);
+          yPos += 8;
+          
+          // Respuestas
+          doc.setFont(undefined, 'bold');
+          doc.text('Respuestas:', margin + 5, yPos);
+          yPos += 7;
+          
+          doc.setFont(undefined, 'normal');
+          Object.entries(response.answers).forEach(([question, answer]) => {
+            if (yPos > 250) {
+              doc.addPage();
+              yPos = 20;
+            }
+            
+            const text = `${question}: ${answer}`;
+            const lines = doc.splitTextToSize(text, maxWidth - 10);
+            doc.text(lines, margin + 10, yPos);
+            yPos += lines.length * 7 + 2;
+          });
+          
+          yPos += 10; // Espacio entre respuestas
+        });
+        
+        // Guardar PDF
+        doc.save(`${fileName}.pdf`);
+      }
+      
+    } catch (error) {
+      console.error('Error al exportar respuestas:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error al exportar las respuestas',
+        severity: 'error',
+      });
+    } finally {
+      handleMenuClose();
+    }
   };
 
   const handleCloseSnackbar = () => {

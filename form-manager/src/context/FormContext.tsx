@@ -59,12 +59,12 @@ interface FormContextType {
   forms: Form[];
   currentForm: Form | null;
   activities: Activity[];
-  addForm: (form: Omit<Form, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  addForm: (form: Omit<Form, 'id' | 'createdAt' | 'updatedAt'>) => Form;
   updateForm: (id: string, updates: Partial<Form>) => void;
   deleteForm: (id: string) => void;
   getFormById: (id: string) => Form | undefined;
   getRecentActivities: (limit?: number) => Activity[];
-  exportFormData: (formId: string, format: 'csv' | 'json' | 'pdf') => void;
+  exportFormData: (formId: string, format: 'csv' | 'json' | 'xlsx' | 'pdf') => Promise<void>;
   exportAllForms: (format: 'csv' | 'json' | 'xlsx') => void;
   setCurrentForm: (form: Form | null) => void;
   
@@ -84,75 +84,87 @@ export const FormProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return savedActivities ? JSON.parse(savedActivities) : [];
   });
 
+  // Datos de ejemplo para pruebas (respaldo)
+  const defaultForms: Form[] = [
+    {
+      id: '1',
+      title: 'Encuesta de satisfacción',
+      description: 'Encuesta para medir la satisfacción del cliente',
+      fields: [
+        { id: '1', type: 'text', label: 'Nombre', required: true },
+        { id: '2', type: 'rating', label: 'Calificación', required: true },
+      ],
+      status: 'published',
+      type: 'survey',
+      tags: ['satisfacción', 'cliente'],
+      responsesCount: 1,
+      lastResponseAt: '2025-05-15T10:30:00Z',
+      createdAt: '2025-01-10T09:00:00Z',
+      updatedAt: '2025-05-15T10:30:00Z',
+    },
+    {
+      id: '2',
+      title: 'Registro para taller',
+      description: 'Formulario de registro para el taller de programación',
+      fields: [
+        { id: '1', type: 'text', label: 'Nombre completo', required: true },
+        { id: '2', type: 'email', label: 'Correo electrónico', required: true },
+        {
+          id: '3',
+          type: 'select',
+          label: 'Nivel de experiencia',
+          options: ['Principiante', 'Intermedio', 'Avanzado'],
+          required: true,
+        },
+      ],
+      status: 'draft',
+      type: 'registration',
+      tags: ['taller', 'programación'],
+      responsesCount: 0,
+      createdAt: '2025-02-20T14:15:00Z',
+      updatedAt: '2025-02-20T14:15:00Z',
+    },
+    {
+      id: '3',
+      title: 'Cuestionario de conocimientos',
+      description: 'Prueba tus conocimientos en React',
+      fields: [
+        {
+          id: '1',
+          type: 'multiple-choice',
+          label: '¿Qué es el Virtual DOM?',
+          options: [
+            'Un DOM real',
+            'Una representación en memoria del DOM',
+            'Una librería de animaciones',
+          ],
+          required: true,
+        },
+        {
+          id: '2',
+          type: 'text',
+          label: 'Explica el ciclo de vida de un componente',
+          required: true,
+        },
+      ],
+      status: 'published',
+      type: 'quiz',
+      tags: ['react', 'quiz'],
+      responsesCount: 0,
+      createdAt: '2025-03-10T12:00:00Z',
+      updatedAt: '2025-03-10T12:00:00Z',
+    },
+  ];
+
+  // Estado de formularios: intenta cargar desde localStorage primero
   const [forms, setForms] = useState<Form[]>(() => {
-    // Datos de ejemplo para pruebas
-    return [
-      {
-        id: '1',
-        title: 'Encuesta de satisfacción',
-        description: 'Encuesta para medir la satisfacción del cliente',
-        fields: [
-          { id: '1', type: 'text', label: 'Nombre', required: true },
-          { id: '2', type: 'rating', label: 'Calificación', required: true }
-        ],
-        status: 'published',
-        type: 'survey',
-        tags: ['satisfacción', 'cliente'],
-        responsesCount: 24,
-        lastResponseAt: '2023-05-15T10:30:00Z',
-        createdAt: '2023-01-10T09:00:00Z',
-        updatedAt: '2023-05-15T10:30:00Z'
-      },
-      {
-        id: '2',
-        title: 'Registro para taller',
-        description: 'Formulario de registro para el taller de programación',
-        fields: [
-          { id: '1', type: 'text', label: 'Nombre completo', required: true },
-          { id: '2', type: 'email', label: 'Correo electrónico', required: true },
-          { id: '3', type: 'select', label: 'Nivel de experiencia', options: ['Principiante', 'Intermedio', 'Avanzado'], required: true }
-        ],
-        status: 'draft',
-        type: 'registration',
-        tags: ['taller', 'programación'],
-        responsesCount: 0,
-        createdAt: '2023-02-20T14:15:00Z',
-        updatedAt: '2023-02-20T14:15:00Z'
-      },
-      {
-        id: '3',
-        title: 'Cuestionario de conocimientos',
-        description: 'Prueba tus conocimientos en React',
-        fields: [
-          { id: '1', type: 'multiple-choice', label: '¿Qué es el Virtual DOM?', options: ['Un DOM real', 'Una representación en memoria del DOM', 'Una librería de animaciones'], required: true },
-          { id: '2', type: 'text', label: 'Explica el ciclo de vida de un componente', required: true }
-        ],
-        status: 'published',
-        type: 'quiz',
-        tags: ['react', 'evaluación'],
-        responsesCount: 15,
-        lastResponseAt: '2023-04-05T16:45:00Z',
-        createdAt: '2023-03-01T10:00:00Z',
-        updatedAt: '2023-04-05T16:45:00Z'
-      },
-      {
-        id: '4',
-        title: 'Formulario de contacto',
-        description: 'Contáctanos para más información',
-        fields: [
-          { id: '1', type: 'text', label: 'Nombre', required: true },
-          { id: '2', type: 'email', label: 'Correo electrónico', required: true },
-          { id: '3', type: 'textarea', label: 'Mensaje', required: true }
-        ],
-        status: 'archived',
-        type: 'contact',
-        tags: ['contacto', 'información'],
-        responsesCount: 8,
-        lastResponseAt: '2023-01-25T11:20:00Z',
-        createdAt: '2023-01-01T08:00:00Z',
-        updatedAt: '2023-03-10T09:15:00Z'
-      }
-    ];
+    try {
+      const stored = localStorage.getItem('forms');
+      return stored ? JSON.parse(stored) : defaultForms;
+    } catch (e) {
+      console.error('Error al leer formularios desde localStorage', e);
+      return defaultForms;
+    }
   });
 
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => {
@@ -225,6 +237,7 @@ export const FormProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       userName: 'Usuario Actual',
       details: { status: newForm.status, type: newForm.type }
     });
+    return newForm;
   };
 
   const updateForm = (id: string, updates: Partial<Form>) => {
@@ -277,11 +290,11 @@ export const FormProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return activities.slice(0, limit);
   };
 
-  const exportFormData = (formId: string, format: 'csv' | 'json' | 'pdf') => {
+  const exportFormData = async (formId: string, format: 'csv' | 'json' | 'xlsx' | 'pdf') => {
     const form = getFormById(formId);
     if (!form) return;
 
-    const data = {
+    const formData = {
       form: {
         id: form.id,
         title: form.title,
@@ -290,38 +303,151 @@ export const FormProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         type: form.type,
         createdAt: form.createdAt,
         updatedAt: form.updatedAt,
-        responsesCount: form.responsesCount
+        responsesCount: form.responsesCount || 0
       },
       fields: form.fields,
       activities: activities.filter(a => a.formId === formId)
     };
 
-    if (format === 'json') {
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      saveAs(blob, `form-${form.title.toLowerCase().replace(/\s+/g, '-')}.json`);
-    } else if (format === 'csv') {
-      // Implementar lógica para CSV
-      const csvRows = [];
-      const headers = ['ID', 'Título', 'Estado', 'Tipo', 'Creado', 'Actualizado', 'Respuestas'];
-      csvRows.push(headers.join(','));
-      
-      const values = [
-        form.id,
-        `"${form.title}"`,
-        form.status,
-        form.type,
-        new Date(form.createdAt).toLocaleDateString(),
-        new Date(form.updatedAt).toLocaleDateString(),
-        form.responsesCount
-      ];
-      csvRows.push(values.join(','));
-      
-      const csvContent = csvRows.join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      saveAs(blob, `form-${form.title.toLowerCase().replace(/\s+/g, '-')}.csv`);
-    } else if (format === 'pdf') {
-      // Implementar lógica para PDF
-      console.log('PDF export not yet implemented', data);
+    const fileName = `formulario-${form.title.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}`;
+
+    try {
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(formData, null, 2)], { type: 'application/json' });
+        saveAs(blob, `${fileName}.json`);
+        return;
+      }
+
+      if (format === 'csv') {
+        // Preparar datos para CSV
+        const headers = [
+          'ID', 'Título', 'Descripción', 'Estado', 'Tipo', 'Fecha de Creación', 
+          'Última Actualización', 'Número de Respuestas'
+        ];
+        
+        const rows = [
+          [
+            formData.form.id,
+            `"${formData.form.title.replace(/"/g, '""')}"`,
+            `"${(formData.form.description || '').replace(/"/g, '""')}"`,
+            formData.form.status,
+            formData.form.type,
+            new Date(formData.form.createdAt).toLocaleString(),
+            new Date(formData.form.updatedAt).toLocaleString(),
+            formData.form.responsesCount
+          ]
+        ];
+
+        // Crear contenido CSV
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        saveAs(blob, `${fileName}.csv`);
+        return;
+      }
+
+      if (format === 'xlsx') {
+        const XLSX = await import('xlsx');
+        
+        // Crear hoja de cálculo para la información del formulario
+        const formWS = XLSX.utils.json_to_sheet([{
+          'ID': formData.form.id,
+          'Título': formData.form.title,
+          'Descripción': formData.form.description,
+          'Estado': formData.form.status,
+          'Tipo': formData.form.type,
+          'Fecha de Creación': new Date(formData.form.createdAt).toLocaleString(),
+          'Última Actualización': new Date(formData.form.updatedAt).toLocaleString(),
+          'Número de Respuestas': formData.form.responsesCount
+        }]);
+
+        // Crear hoja de cálculo para los campos del formulario
+        const fieldsWS = XLSX.utils.json_to_sheet(formData.fields.map(field => ({
+          'ID': field.id,
+          'Etiqueta': field.label,
+          'Tipo': field.type,
+          'Requerido': field.required ? 'Sí' : 'No',
+          'Opciones': field.options ? field.options.join(', ') : 'N/A',
+          'Placeholder': field.placeholder || 'N/A'
+        })));
+
+        // Crear un nuevo libro de trabajo y agregar las hojas
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, formWS, 'Información del Formulario');
+        XLSX.utils.book_append_sheet(wb, fieldsWS, 'Campos del Formulario');
+
+        // Generar archivo Excel
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+        return;
+      }
+
+
+      if (format === 'pdf') {
+        const { jsPDF } = await import('jspdf');
+        const doc = new jsPDF();
+        let yPos = 20;
+        
+        // Título del formulario
+        doc.setFontSize(18);
+        doc.text(`Formulario: ${formData.form.title}`, 14, yPos);
+        yPos += 10;
+        
+        // Información básica
+        doc.setFontSize(12);
+        doc.text(`ID: ${formData.form.id}`, 14, yPos);
+        yPos += 10;
+        doc.text(`Descripción: ${formData.form.description || 'N/A'}`, 14, yPos);
+        yPos += 10;
+        doc.text(`Estado: ${formData.form.status}`, 14, yPos);
+        yPos += 10;
+        doc.text(`Tipo: ${formData.form.type}`, 14, yPos);
+        yPos += 10;
+        doc.text(`Creado: ${new Date(formData.form.createdAt).toLocaleString()}`, 14, yPos);
+        yPos += 10;
+        doc.text(`Última actualización: ${new Date(formData.form.updatedAt).toLocaleString()}`, 14, yPos);
+        yPos += 15;
+        
+        // Campos del formulario
+        doc.setFontSize(16);
+        doc.text('Campos:', 14, yPos);
+        yPos += 10;
+        
+        doc.setFontSize(12);
+        formData.fields.forEach((field, index) => {
+          if (yPos > 250) {
+            doc.addPage();
+            yPos = 20;
+          }
+          
+          doc.setFont(undefined, 'bold');
+          doc.text(`${index + 1}. ${field.label} (${field.type})`, 14, yPos);
+          yPos += 7;
+          
+          doc.setFont(undefined, 'normal');
+          const fieldDetails = [
+            `ID: ${field.id}`,
+            `Requerido: ${field.required ? 'Sí' : 'No'}`,
+            field.placeholder && `Placeholder: ${field.placeholder}`,
+            field.options && `Opciones: ${field.options.join(', ')}`
+          ].filter(Boolean);
+          
+          fieldDetails.forEach(detail => {
+            doc.text(`• ${detail}`, 20, yPos);
+            yPos += 6;
+          });
+          
+          yPos += 6;
+        });
+        
+        // Guardar el PDF
+        doc.save(`${fileName}.pdf`);
+      }
+    } catch (error) {
+      console.error('Error al exportar el formulario:', error);
+      throw error;
     }
   };
 
@@ -369,6 +495,15 @@ export const FormProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Error saving filters', e);
     }
   }, [savedFilters]);
+
+  // Persistir formularios en localStorage cuando cambien
+  useEffect(() => {
+    try {
+      localStorage.setItem('forms', JSON.stringify(forms));
+    } catch (e) {
+      console.error('Error al guardar formularios', e);
+    }
+  }, [forms]);
 
   const addSavedFilter = (filter: Omit<SavedFilter, 'id'>) => {
     const newFilter = {

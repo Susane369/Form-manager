@@ -1,18 +1,20 @@
-import { useState } from 'react';
+import { keyframes } from '@emotion/react';
 import { styled } from '@mui/material/styles';
-import { Box, Tooltip, Zoom, keyframes } from '@mui/material';
+import { Box, Tooltip, Zoom } from '@mui/material';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import CloseIcon from '@mui/icons-material/Close';
+import { useState } from 'react';
+import ChatInterface from './ChatInterface';
 
 const pulse = keyframes`
   0% {
-    box-shadow: 0 0 0 0 rgba(25, 118, 210, 0.7);
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.7);
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(25, 118, 210, 0);
+    box-shadow: 0 0 0 10px rgba(0, 0, 0, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(25, 118, 210, 0);
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
   }
 `;
 
@@ -48,7 +50,6 @@ const FloatingChatButton = () => {
 
   const handleClick = () => {
     setIsOpen(!isOpen);
-    // Future implementation will handle chat opening
   };
 
   return (
@@ -65,7 +66,7 @@ const FloatingChatButton = () => {
           onMouseLeave={() => setIsHovered(false)}
           sx={{
             '&:hover': {
-              animation: 'none', // Remove pulse animation on hover
+              animation: 'none', 
             },
           }}
         >
@@ -77,10 +78,7 @@ const FloatingChatButton = () => {
         </StyledFab>
       </Tooltip>
       
-      {/* Future chat interface will go here */}
-      {/* {isOpen && (
-        <ChatInterface onClose={() => setIsOpen(false)} />
-      )} */}
+      {isOpen && <ChatInterface onClose={() => setIsOpen(false)} />}
     </>
   );
 };

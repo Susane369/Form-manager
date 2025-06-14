@@ -11,6 +11,8 @@ import FormList from './pages/FormList';
 import FormBuilder from './pages/FormBuilder';
 import FormResponses from './pages/FormResponses';
 import NotFound from './pages/NotFound';
+import FormPublicView from './pages/FormPublicView';
+import Analytics from './pages/Analytics';
 
 // Context
 import { FormProvider } from './context/FormContext';
@@ -49,6 +51,8 @@ function App() {
                 <Route path="/forms/create" element={<FormBuilder />} />
                 <Route path="/forms/edit/:id" element={<FormBuilder />} />
                 <Route path="/forms/responses/:id" element={<FormResponses />} />
+                <Route path="/forms/public/:id" element={<FormPublicView />} />
+                <Route path="/analytics" element={<Analytics />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Container>
